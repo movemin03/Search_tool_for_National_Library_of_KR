@@ -27,3 +27,11 @@ you can make exe file by Pyinstaller
 like "pyinstaller --onefile --hidden-import openxl --noconsole GUI_Search_tool_for_National_Library_of_KR_3456.py"
 
 Or just download "exe" file.
+
+py user:
+  tkinter
+  urllib
+  pandas
+  openxl
+  requests
+  are imported
