@@ -563,6 +563,7 @@ def find_book(x):
         for j in data:
             class_num_3 = str(j["authorInfo"])
             class_num_3_2 = re.sub(r"[^\uAC00-\uD7A30]", "", class_num_3)
+            global class_num_re
 
             if class_num_3_2 != "":
                 if (class_num_3_2.find('구성') != -1) or (class_num_3_2.find('저자') != -1):
