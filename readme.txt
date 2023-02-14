@@ -24,4 +24,6 @@ and fail data will be restore with name "실패목록.txt"
 You should search data in your fail list manually.
 
 you can make exe file by Pyinstaller
-Or just download "programfor.exe"
+like "pyinstaller --onefile --hidden-import openxl --noconsole GUI_Search_tool_for_National_Library_of_KR_3456.py"
+
+Or just download "exe" file.
