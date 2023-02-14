@@ -153,6 +153,10 @@ def execute_3():
         tkinter.messagebox.showwarning(title="알림",
                                        message="경로를 지정하고 불러오기 버튼을 다시 눌러주세요. 텍스트 파일만 가능합니다. 확장자를 포함하여 입력합니다. 예를 들어 C:\\\\test\\test.txt")
     else:
+        try:
+            path = path.replace('"', '')
+        except:
+            pass
         try:  # 텍스트 파일 불러오기
             isbn_txt = open(path, 'r')
             global List
@@ -297,7 +301,7 @@ def execute():
         ResultViewlabel_Scrollbar_2.insert(tk.END, '오류 개수: ' + str(error_count))
         ResultViewlabel_Scrollbar_2.insert(tk.END, '오류 항목: ' + str(error_list))
         ResultViewlabel_Scrollbar_2.insert(tk.END, '빈 결과 값 나온 항목' + str(blank_list))
-        ResultViewlabel_Scrollbar_2.insert(tk.END, '빈 결과 값이 나온 경우, 검색은 성공했으나 어린이 도서관 혹은 디지털 보관 자료입니다. 별도로 구분해야 합니다.')
+        ResultViewlabel_Scrollbar_2.insert(tk.END, '빈 결과 값이 나온 경우, 검색은 성공했으나 일부 항목에 있어 누락된 결과 값이 있을 수 있습니다')
         ResultViewlabel_Scrollbar_2.insert(tk.END, '결과 값은 이 프로그램이 저장된 위치에 저장됩니다')
         time_end_2 = time.time()
 
@@ -319,7 +323,7 @@ def execute():
         f_f.write("빈 결과 값 나온 항목: ")
         f_f.write("빈 결과 값 나온 항목: ")
         f_f.write(str(blank_list))
-        f_f.write('\n빈 결과 값이 나온 경우, 검색은 성공했으나 어린이 도서관 혹은 디지털 보관 자료입니다. 별도로 구분해야 합니다.\n')
+        f_f.write('\n빈 결과 값이 나온 경우, 검색은 성공했으나 일부 항목에 있어 누락된 결과 값이 있을 수 있습니다\n')
 
         f_f.close()
 
@@ -550,6 +554,7 @@ def find_book(x):
         for h in data:
             class_num_2 = h['titleInfo']
     except:
+        error_list.append(x)
         pass
 
     d_2.append(class_num_2)
@@ -563,7 +568,7 @@ def find_book(x):
         for j in data:
             class_num_3 = str(j["authorInfo"])
             class_num_3_2 = re.sub(r"[^\uAC00-\uD7A30]", "", class_num_3)
-            global class_num_re
+            global class_num_3_re
 
             if class_num_3_2 != "":
                 if (class_num_3_2.find('구성') != -1) or (class_num_3_2.find('저자') != -1):
