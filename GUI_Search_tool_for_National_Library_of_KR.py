@@ -1,653 +1,859 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox, filedialog
 import urllib.request
 import json
 import pandas as pd
 import re
-import tkinter.messagebox
 import time
-
-win = tk.Tk()
-win.title("국립중앙도서관 대량 검색 프로그램")
-
-w = 510  # width for the Tk root
-h = 710  # height for the Tk root
-
-# get screen width and height
-ws = win.winfo_screenwidth()  # width of the screen
-hs = win.winfo_screenheight()  # height of the screen
-
-# calculate x and y coordinates for the Tk root window
-x = (ws / 2) - (w / 2)
-y = (hs / 2) - (h / 2)
-
-# set the dimensions of the screen
-# and where it is placed
-win.geometry('%dx%d+%d+%d' % (w, h, x, y))
-win.resizable(False, True)
-
-tabcontrol = ttk.Notebook(win)
-
-tab1 = ttk.Frame()  # 2개의 탭을 나누는 것
-tabcontrol.add(tab1, text="")
-tabcontrol.pack(expand=0, fill="both")
-
-# ==========================================================================
-# 검색창 프레임
-firstlabel = ttk.LabelFrame(tab1, text="검색어 입력")  # 첫번째 테이블에서 레이블 프레임을 만듬
-firstlabel.grid(column=0, row=0, padx=6, pady=4)
-
-# 검색박스 입력창
-label1_textbox = tk.StringVar()
-label1_textbox = ttk.Entry(firstlabel, width=30)
-label1_textbox.grid(column=0, row=0)
-
-# 필수 옵션 프레임
-secondlabel = ttk.LabelFrame(tab1, text="옵션")
-secondlabel.grid(column=0, row=5, sticky="w", padx=8, pady=4)
-
-# 필수 옵션 오디오 버튼_1
-option_1 = tk.IntVar()
-rad1 = tk.Radiobutton(secondlabel, text="   전체항목 검색   ", value=0, variable=option_1)
-rad1.grid(column=6, row=0)
-
-# 필수 옵션 오디오 버튼_2
-rad2 = tk.Radiobutton(secondlabel, text="   저자기호 검색   ", value=1, variable=option_1)
-rad2.grid(column=6, row=1)
-
-option_3 = tk.IntVar()
-chk1 = tk.Checkbutton(secondlabel, text="오류 무시(선택)", variable=option_3)
-chk1.grid(column=6, row=3, sticky="w")
-
-# 파일 저장명 프레임
-thirdlabel = ttk.LabelFrame(tab1, text="파일 저장명")
-thirdlabel.grid(column=0, row=5, sticky="e", padx=8, pady=4)
-
-# 성공 파일 저장명 라벨
-label2 = ttk.Label(thirdlabel, text="성공목록 파일명:", width=13)
-label2.grid(column=0, row=0)
-
-# 성공 파일 저장명 입력창
-label2_textbox = ttk.Entry(thirdlabel, width=35)
-label2_textbox.insert(0, "성공목록")
-label2_textbox.grid(column=1, row=0)
-
-# 실패 파일 저장명 라벨
-label3 = ttk.Label(thirdlabel, text="실패목록 파일명:", width=13)
-label3.grid(column=0, row=1)
-
-# 실패 파일 저장명 입력창
-label3_textbox = ttk.Entry(thirdlabel, width=35)
-label3_textbox.insert(0, "실패목록")
-label3_textbox.grid(column=1, row=1)
-
-ResultViewlabel_2 = ttk.LabelFrame(tab1, text="알림")
-ResultViewlabel_2.grid(column=0, row=14, padx=8, pady=4)
-
-ResultViewlabel_Scrollbar_2 = tk.Listbox(ResultViewlabel_2, selectmode="extended", width=80, height=9,
-                                         font=('Normal', 9),
-                                         yscrollcommand=tk.Scrollbar(ResultViewlabel_2).set)
-ResultViewlabel_Scrollbar_2.grid(column=0, row=0)
-
-# 실행 결과 스크롤 박스
-ResultViewlabel = ttk.LabelFrame(tab1, text="실행내용")
-ResultViewlabel.grid(column=0, row=3, padx=8, pady=4)
-
-ResultViewlabel_Scrollbar = tk.Listbox(ResultViewlabel, selectmode="extended", width=80, height=20, font=('Normal', 9),
-                                       yscrollcommand=tk.Scrollbar(ResultViewlabel).set)
-ResultViewlabel_Scrollbar.grid(column=0, row=1)
-
-ResultViewlabel_Scrollbar.insert(tk.END, "ver 2022-11-29")
-ResultViewlabel_Scrollbar.insert(tk.END, "Developer : https://github.com/movemin03")
-ResultViewlabel_Scrollbar.insert(tk.END, "필수 옵션을 먼저 변경한 후 자료를 입력해주세요")
-ResultViewlabel_Scrollbar.insert(tk.END, "여러 개를 입력 시 띄어쓰기로 항목을 구분합니다")
-ResultViewlabel_Scrollbar.insert(tk.END, "많은 양의 자료를 입력시 버벅거릴 수 있으나 기다려주세요")
-ResultViewlabel_Scrollbar.insert(tk.END, "너무 버벅일 경우 불러오기 기능 사용을 권장합니다")
-ResultViewlabel_Scrollbar.insert(tk.END, "자료가 800개 이상일 경우는 나눠서 하기를 권장 드립니다")
-
-# progress_bar 타입 설정
-pb_type = tk.DoubleVar()
-pb_type_2 = tk.DoubleVar()
-
-progress_bar = ttk.Progressbar(ResultViewlabel, orient="horizontal", length=400, mode="determinate", maximum=100,
-                               variable=pb_type)
-
-# ==========================================================================
+import os
+import shutil
+from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional
 
 
-count = 0  # 값 저장 공간
-recount = 0  # isbn10 으로 변경한 횟수
-error_count = 0  # 에러 개수
-progress = 0  # 전체 progress 정도 측정
-extend = 0  # 불러오기 클릭 횟수
+class LibrarySearchApp:
+    def __init__(self, root):
+        self.root = root
+        self.setup_window()
+        self.create_widgets()
+        self.initialize_variables()
 
-error_list = []  # 에러 목록
-blank_list = []  # 빈 항목 목록
-d_1 = []  # 입력된 ISBN
-d_2 = []  # 제목정보
-d_3 = []  # 저자정보
-d_4 = []  # 대분류번호
-d_5 = []  # 출판사정보
-d_6 = []  # 출판연도
-d_7 = []  # 저자기호
-d_8 = []  # 분류번호
+    def setup_window(self):
+        """윈도우 기본 설정"""
+        self.root.title("국립중앙도서관 대량 검색 프로그램")
 
-global firstlabel_sub
-firstlabel_sub = ttk.LabelFrame(firstlabel, text="불러올 경로 입력(텍스트 파일만)")  # 첫번째 테이블에서 레이블 프레임을 만듬
-firstlabel_sub.grid(column=0, row=1, padx=6, pady=4)
+        width, height = 510, 710
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
 
+        x_position = (screen_width / 2) - (width / 2)
+        y_position = (screen_height / 2) - (height / 2)
 
-def execute_3():
-    global extend  # 불러오기 버튼 클릭 횟수 기록
-    extend += 1
-    if extend < 2:   # 불러오기 입력창 열기
-        global label1_textbox_sub
-        label1_textbox_sub = ttk.Entry(firstlabel_sub, width=30, textvariable=tk.StringVar())
-        label1_textbox_sub.grid(column=0, row=1)
-    else:
-        pass
-    global path  # 불러오기 입력창 내용 가져오기
-    path = str(label1_textbox_sub.get())
+        self.root.geometry(f"{width}x{height}+{int(x_position)}+{int(y_position)}")
+        self.root.resizable(False, True)
 
-    if len(path) < 1:
-        tkinter.messagebox.showwarning(title="알림",
-                                       message="경로를 지정하고 불러오기 버튼을 다시 눌러주세요. 텍스트 파일만 가능합니다. 확장자를 포함하여 입력합니다. 예를 들어 C:\\\\test\\test.txt")
-    else:
-        try:
-            path = path.replace('"', '')
-        except:
-            pass
-        try:  # 텍스트 파일 불러오기
-            isbn_txt = open(path, 'r')
-            global List
-            List = isbn_txt.readlines()
-            isbn_txt.close
-            tkinter.messagebox.showinfo(title="알림", message="데이터를 불러왔습니다. 바로 검색을 시작합니다")
-            global path_load
-            path_load = "true"  # 불러오기 여부 변경
-            execute()
-            path_load = "false"  # 불러오기 여부 변경
-        except:
-            tkinter.messagebox.showwarning(title="알림", message=path + " 경로에서 txt 파일을 찾지 못했습니다.")
+    def create_widgets(self):
+        """UI 위젯 생성"""
+        self.main_frame = ttk.Frame(self.root)
+        self.main_frame.pack(expand=0, fill="both")
 
+        # 검색창 프레임
+        self.create_search_frame()
 
-# 검색 버튼 실행 모듈
-def execute():
-    # 걸린 시간 측정 시작
-    time_start = time.time()
-    # 실행 영역
-    ResultViewlabel_Scrollbar_2.delete(0, 99999999)
+        # 옵션 프레임
+        self.create_options_frame()
 
-    try:  # path_load 값 없을 것에 대비
-        global List
-        if path_load == "true":  # 텍스트 파일에서 내용을 불러와서 이미 List 가 만들어졌으므로
-            pass
+        # 파일 저장명 프레임
+        self.create_file_name_frame()
+
+        # 파일 저장 위치 프레임
+        self.create_save_location_frame()
+
+        # 알림 프레임
+        self.create_notification_frame()
+
+        # 실행 결과 프레임
+        self.create_result_frame()
+
+        # 버튼 프레임
+        self.create_button_frame()
+
+    def create_search_frame(self):
+        """검색창 프레임 생성"""
+        self.search_frame = ttk.LabelFrame(self.main_frame, text="검색어 입력")
+        self.search_frame.pack(fill="x", padx=6, pady=4)
+
+        # 검색어 입력창
+        self.search_entry = ttk.Entry(self.search_frame, width=30)
+        self.search_entry.grid(column=0, row=0, padx=5, pady=5)
+
+        # 초기화, 불러오기 버튼
+        self.reset_button = ttk.Button(self.search_frame, text="초기화", command=self.reset_search)
+        self.reset_button.grid(column=1, row=0, padx=5, pady=5, sticky="W")
+
+        self.load_button = ttk.Button(self.search_frame, text="불러오기", command=self.load_from_file)
+        self.load_button.grid(column=2, row=0, padx=5, pady=5, sticky="W")
+
+        # 파일 불러오기 프레임 (초기에는 숨겨져 있음)
+        self.file_load_frame = ttk.LabelFrame(self.search_frame, text="불러올 경로 입력(텍스트 파일만)")
+        self.file_load_frame.grid(column=0, row=1, columnspan=3, padx=6, pady=4, sticky="ew")
+
+    def create_options_frame(self):
+        """옵션 프레임 생성"""
+        self.options_frame = ttk.LabelFrame(self.main_frame, text="옵션")
+        self.options_frame.pack(fill="x", padx=8, pady=4)
+
+        # 내부 프레임 생성 (가로 배치용)
+        inner_frame = ttk.Frame(self.options_frame)
+        inner_frame.pack(fill="x", padx=5, pady=5)
+
+        # 검색 옵션 라디오 버튼과 체크박스를 가로로 배치
+        self.search_option = tk.IntVar()
+        self.radio_all = tk.Radiobutton(inner_frame, text="전체항목 검색",
+                                        value=0, variable=self.search_option)
+        self.radio_all.pack(side=tk.LEFT, padx=10, pady=2)
+
+        self.radio_author = tk.Radiobutton(inner_frame, text="저자기호 검색",
+                                           value=1, variable=self.search_option)
+        self.radio_author.pack(side=tk.LEFT, padx=10, pady=2)
+
+        # 오류 무시 체크박스
+        self.ignore_errors = tk.IntVar()
+        self.check_ignore = tk.Checkbutton(inner_frame, text="오류 무시(선택)",
+                                           variable=self.ignore_errors)
+        self.check_ignore.pack(side=tk.LEFT, padx=10, pady=2)
+
+    def create_file_name_frame(self):
+        """파일 저장명 프레임 생성"""
+        self.file_name_frame = ttk.LabelFrame(self.main_frame, text="파일 저장명")
+        self.file_name_frame.pack(fill="x", padx=8, pady=4)
+
+        # 성공 파일명
+        self.success_label = ttk.Label(self.file_name_frame, text="성공목록 파일명:", width=13)
+        self.success_label.grid(column=0, row=0, padx=5, pady=2)
+
+        self.success_entry = ttk.Entry(self.file_name_frame, width=35)
+        self.success_entry.insert(0, "성공목록")
+        self.success_entry.grid(column=1, row=0, padx=5, pady=2)
+
+        # 실패 파일명
+        self.fail_label = ttk.Label(self.file_name_frame, text="실패목록 파일명:", width=13)
+        self.fail_label.grid(column=0, row=1, padx=5, pady=2)
+
+        self.fail_entry = ttk.Entry(self.file_name_frame, width=35)
+        self.fail_entry.insert(0, "실패목록")
+        self.fail_entry.grid(column=1, row=1, padx=5, pady=2)
+
+    def create_save_location_frame(self):
+        """파일 저장 위치 프레임 생성"""
+        self.save_location_frame = ttk.LabelFrame(self.main_frame, text="파일 저장 위치")
+        self.save_location_frame.pack(fill="x", padx=8, pady=4)
+
+        # 기본 저장 경로 설정 (사용자 바탕화면/국립중앙도서관_ISBN검색)
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+        default_save_path = os.path.join(desktop_path, "국립중앙도서관_ISBN검색")
+
+        # 저장 경로 입력창
+        self.save_path_entry = ttk.Entry(self.save_location_frame, width=50)
+        self.save_path_entry.insert(0, default_save_path)
+        self.save_path_entry.grid(column=0, row=0, padx=5, pady=5)
+
+        # 경로 찾기 버튼
+        self.browse_button = ttk.Button(self.save_location_frame, text="찾기", command=self.browse_save_location)
+        self.browse_button.grid(column=1, row=0, padx=5, pady=5)
+
+    def create_notification_frame(self):
+        """알림 프레임 생성"""
+        self.notification_frame = ttk.LabelFrame(self.main_frame, text="알림")
+        self.notification_frame.pack(fill="x", padx=8, pady=4)
+
+        # 스크롤바 추가
+        scrollbar = ttk.Scrollbar(self.notification_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.notification_listbox = tk.Listbox(
+            self.notification_frame,
+            selectmode="extended",
+            width=80,
+            height=9,
+            font=('Normal', 9),
+            yscrollcommand=scrollbar.set
+        )
+        self.notification_listbox.pack(fill="both", expand=True, padx=5, pady=5)
+        scrollbar.config(command=self.notification_listbox.yview)
+
+        # 알림창 초기 메시지
+        self.notification_listbox.insert(tk.END, "알림: 검색 결과 요약 정보가 여기에 표시됩니다")
+        self.notification_listbox.insert(tk.END, "검색 성공 개수, 오류 개수, 처리 속도 등이 표시됩니다")
+
+    def create_result_frame(self):
+        """실행 결과 프레임 생성"""
+        self.result_frame = ttk.LabelFrame(self.main_frame, text="실행내용")
+        self.result_frame.pack(fill="x", padx=8, pady=4)
+
+        # 스크롤바 추가
+        scrollbar = ttk.Scrollbar(self.result_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 실행 내용 로그창 크기를 알림창과 동일하게 조정 (height=9)
+        self.result_listbox = tk.Listbox(
+            self.result_frame,
+            selectmode="extended",
+            width=80,
+            height=9,
+            font=('Normal', 9),
+            yscrollcommand=scrollbar.set
+        )
+        self.result_listbox.pack(fill="both", expand=True, padx=5, pady=5)
+        scrollbar.config(command=self.result_listbox.yview)
+
+        # 초기 메시지 추가
+        self.result_listbox.insert(tk.END, "ver 2025-05-12")
+        self.result_listbox.insert(tk.END, "Developer : https://github.com/movemin03")
+        self.result_listbox.insert(tk.END, "필수 옵션을 먼저 변경한 후 자료를 입력해주세요")
+        self.result_listbox.insert(tk.END, "여러 개를 입력 시 띄어쓰기로 항목을 구분합니다")
+        self.result_listbox.insert(tk.END, "많은 양의 자료를 입력시 버벅거릴 수 있으나 기다려주세요")
+        self.result_listbox.insert(tk.END, "너무 버벅일 경우 불러오기 기능 사용을 권장합니다")
+        self.result_listbox.insert(tk.END, "자료가 800개 이상일 경우는 나눠서 하기를 권장 드립니다")
+
+        # 진행 상태바 프레임
+        self.progress_frame = ttk.Frame(self.result_frame)
+        self.progress_frame.pack(fill="x", padx=5, pady=5)
+
+        self.progress_value = tk.DoubleVar()
+        self.total_progress_value = tk.DoubleVar()
+
+        # 단일 진행도
+        self.single_progress_label = ttk.Label(self.progress_frame, text="단일 진행도:", width=11)
+        self.single_progress_label.grid(column=0, row=0, sticky="W", padx=5, pady=2)
+
+        self.progress_bar = ttk.Progressbar(
+            self.progress_frame,
+            orient="horizontal",
+            length=400,
+            mode="determinate",
+            maximum=100,
+            variable=self.progress_value
+        )
+        self.progress_bar.grid(column=1, row=0, sticky="e", padx=5, pady=2)
+
+        # 전체 진행도
+        self.total_progress_label = ttk.Label(self.progress_frame, text="전체 진행도:", width=11)
+        self.total_progress_label.grid(column=0, row=1, sticky="W", padx=5, pady=2)
+
+        self.total_progress_bar = ttk.Progressbar(
+            self.progress_frame,
+            orient="horizontal",
+            length=400,
+            mode="determinate",
+            maximum=100,
+            variable=self.total_progress_value
+        )
+        self.total_progress_bar.grid(column=1, row=1, sticky="e", padx=5, pady=2)
+
+    def create_button_frame(self):
+        """버튼 프레임 생성"""
+        self.button_frame = ttk.Frame(self.main_frame)
+        self.button_frame.pack(fill="x", padx=8, pady=4)
+
+        # 검색 버튼
+        self.search_button = ttk.Button(self.button_frame, text="검색", command=self.execute_search)
+        self.search_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        # 중지 버튼
+        self.stop_button = ttk.Button(self.button_frame, text="중지", command=self.stop_search)
+        self.stop_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        # 저장된 폴더 열기 버튼
+        self.open_folder_button = ttk.Button(self.button_frame, text="저장 폴더 열기", command=self.open_save_folder)
+        self.open_folder_button.pack(side=tk.RIGHT, padx=5, pady=5)
+
+    def initialize_variables(self):
+        """변수 초기화"""
+        self.search_results = SearchResults()
+        self.file_load_count = 0
+        self.is_file_loaded = False
+        self.search_items = []
+        self.api_key = "83a6dcb07e447377b1b6b1fb79fce8fcafec2afcfc8adc768ee2d32a1124b573"
+        self.search_running = False
+
+    def browse_save_location(self):
+        """저장 위치 탐색 다이얼로그 열기"""
+        folder_path = filedialog.askdirectory()
+        if folder_path:
+            self.save_path_entry.delete(0, tk.END)
+            self.save_path_entry.insert(0, folder_path)
+
+    def open_save_folder(self):
+        """저장 폴더 열기"""
+        save_path = self.save_path_entry.get()
+        if os.path.exists(save_path):
+            if os.name == 'nt':  # Windows
+                os.startfile(save_path)
+            elif os.name == 'posix':  # macOS, Linux
+                import subprocess
+                subprocess.Popen(['open', save_path])
         else:
-            List = label1_textbox.get().split()  # 엔트리 창에서 입력 내용 가져오기
-    except:
-        List = label1_textbox.get().split()
+            messagebox.showinfo("알림", "저장 폴더가 아직 생성되지 않았습니다.")
 
-    if List:
-        pass
-    else:
-        tkinter.messagebox.showwarning(title="알림", message="검색어를 입력해주세요")  # 경고 메시지 박스
+    def prepare_save_directory(self):
+        """저장 디렉토리 준비"""
+        save_path = self.save_path_entry.get()
 
-    # 저자명 옵션 시 실행 프로세스
-    if option_1.get() == 1:
-
-        ResultViewlabel_Scrollbar.insert(tk.END, str(len(List)) + '개의 항목에 대하여 검색을 시작합니다')
-        ResultViewlabel_Scrollbar.insert(tk.END, "")
-        for x in List:
-            # 한글, 영어 여부 확인
-            k_count = 0
-            e_count = 0
-            c = x[:1]
-            if ord('가') <= ord(c) <= ord('힣'):
-                k_count += 1
-            elif ord('a') <= ord(c.lower()) <= ord('z'):
-                e_count += 1
-            else:
-                pass
-
-            # 여부 확인 실행 영역
-            if str(x.isalpha()) == "False":
-                global msg_cancel
-                msg_cancel = tkinter.messagebox.askokcancel(title="알림", message=str(
-                    x) + "에 숫자가 포함됐습니다. 저자명이 잘못되었습니다. 검색을 중단하려면 취소 버튼을, 계속하려면 확인 버튼을 눌러주세요")
-                ResultViewlabel_Scrollbar.insert(tk.END, str(x) + "에 숫자가 포함됐습니다.. 저자명이 잘못되었습니다.")
-                ResultViewlabel_Scrollbar.insert(tk.END, "")
-                if str(msg_cancel) == "False":
-                    break
-                else:
-                    pass
-            elif k_count < e_count:
-                msg_cancel = tkinter.messagebox.askokcancel(title="알림", message=str(
-                    x) + "에 영어가 포함됐습니다. 저자명이 잘못되었습니다. 검색을 중단하려면 취소 버튼을, 계속하려면 확인 버튼을 눌러주세요")
-                ResultViewlabel_Scrollbar.insert(tk.END, str(x) + "에 영어가 포함됐습니다. 저자명이 잘못되었습니다.")
-                ResultViewlabel_Scrollbar.insert(tk.END, "")
-                if str(msg_cancel) == "False":
-                    break
-                else:
-                    pass
-            else:
-                global count
-                count += 1
-                global class_num_3_re
-                class_num_3_re = str(x)
-                kr_to_num()
-                ResultViewlabel_Scrollbar.see(tk.END)
-                pass
-        ResultViewlabel_Scrollbar.insert(tk.END, str(d_7))
-        ResultViewlabel_Scrollbar.insert(tk.END, "")
-        ResultViewlabel_Scrollbar.see(tk.END)
-        clear()
-        time_end = time.time()
-        try:
-            take_time = round(len(List) / (time_end - time_start), 4)
-        except:
-            take_time = "∞"
-
-        ResultViewlabel_Scrollbar_2.delete(0, 99999999)
-        ResultViewlabel_Scrollbar_2.insert(tk.END, '\n검색 성공 개수: ' + str(len(List)))
-        ResultViewlabel_Scrollbar_2.insert(tk.END, '처리 속도: ' + str(take_time) + " unit/s (높을수록 좋습니다)")
-
-    else:
-        # 전체 검색 옵션 시 실행 프로세스
-        # 텍스트 파일 생성
-        f_f = open(label3_textbox.get() + '.txt', 'w')
-
-        # 실행
-        ResultViewlabel_Scrollbar.insert(tk.END, str(len(List)) + '개의 항목에 대하여 검색을 시작합니다')
-        time_start_2 = time.time()
-
-        for x in List:
-            x = x[0:13]
-            if len(x) == 10 or len(x) == 13:
-                try:
-                    find_book(x)
-                    count += 1
-                except:
-                    if len(x) == 10:
-                        global error_count
-                        error_count += 1
-                        error_list.append(x)
-                        pass
-                    else:
-                        try:
-                            global recount
-                            recount += 1
-                            ISBN_10(x)
-                        except:
-                            error_count += 1
-            else:
-                if option_3.get() == 0:
-                    global msg_cancel_2
-                    msg_cancel_2 = tkinter.messagebox.askokcancel(title="알림",
-                                                                  message="올바른 ISBN인지 확인해주세요. 10자리 혹은 13자리 숫자여야 합니다. 검색을 중단하려면 취소 버튼을, 계속하려면 확인 버튼을 눌러주세요")
-                    ResultViewlabel_Scrollbar.insert(tk.END, '')
-                    ResultViewlabel_Scrollbar.insert(tk.END, '올바른 ISBN 인지 확인해주세요. 10자리 혹은 13자리 숫자여야 합니다\n')
-                    error_count += 1
-                    if str(msg_cancel_2) == "False":
+        # 이미 폴더가 존재하고 내용물이 있는지 확인
+        if os.path.exists(save_path) and os.listdir(save_path):
+            # 기존 폴더 이름 변경
+            i = 1
+            while True:
+                new_path = f"{save_path}_old({i})"
+                if not os.path.exists(new_path):
+                    try:
+                        os.rename(save_path, new_path)
                         break
-                    else:
-                        pass
-                else:
-                    pass
+                    except PermissionError:
+                        # 폴더를 사용 중인 경우
+                        result = messagebox.askretrycancel(
+                            "오류",
+                            f"'{save_path}' 폴더가 사용 중입니다. 폴더를 닫고 다시 시도하세요."
+                        )
+                        if result:  # 재시도
+                            continue
+                        else:  # 취소
+                            return False
+                i += 1
 
-        pass
-        ResultViewlabel_Scrollbar_2.delete(0, 99999999)
-        ResultViewlabel_Scrollbar_2.insert(tk.END, '\n검색 성공 개수: ' + str(count))
-        ResultViewlabel_Scrollbar_2.insert(tk.END, 'ISBN 변환 시도 개수: ' + str(recount))
-        ResultViewlabel_Scrollbar_2.insert(tk.END, '오류 개수: ' + str(error_count))
-        ResultViewlabel_Scrollbar_2.insert(tk.END, '오류 항목: ' + str(error_list))
-        ResultViewlabel_Scrollbar_2.insert(tk.END, '빈 결과 값 나온 항목' + str(blank_list))
-        ResultViewlabel_Scrollbar_2.insert(tk.END, '빈 결과 값이 나온 경우, 검색은 성공했으나 일부 항목에 있어 누락된 결과 값이 있을 수 있습니다')
-        ResultViewlabel_Scrollbar_2.insert(tk.END, '결과 값은 이 프로그램이 저장된 위치에 저장됩니다')
-        time_end_2 = time.time()
+        # 새 폴더 생성
+        os.makedirs(save_path, exist_ok=True)
+        return True
 
-        pb_type_2.set(len(List))
-        progress_bar_2.update()
-        pb_type.set(100)
-        progress_bar.update()
+    def load_from_file(self):
+        """파일에서 검색어 불러오기"""
+        self.file_load_count += 1
 
-        try:
-            take_time_2 = round(len(List) / (time_end_2 - time_start_2), 4)
-        except:
-            take_time_2 = "∞"
-        ResultViewlabel_Scrollbar_2.insert(tk.END, '처리 속도: ' + str(take_time_2) + ' unit/s (높을수록 좋습니다)')
+        # 첫 번째 클릭 시 입력창 표시
+        if self.file_load_count < 2:
+            self.file_path_entry = ttk.Entry(self.file_load_frame, width=30)
+            self.file_path_entry.grid(column=0, row=1, padx=5, pady=5)
 
-        # 파일 기록 및 저장
-        f_f.write("오류 항목: ")
-        f_f.write(str(error_list))
-        f_f.write("\n")
-        f_f.write("빈 결과 값 나온 항목: ")
-        f_f.write("빈 결과 값 나온 항목: ")
-        f_f.write(str(blank_list))
-        f_f.write('\n빈 결과 값이 나온 경우, 검색은 성공했으나 일부 항목에 있어 누락된 결과 값이 있을 수 있습니다\n')
+            self.file_browse_button = ttk.Button(
+                self.file_load_frame,
+                text="찾기",
+                command=self.browse_file_to_load
+            )
+            self.file_browse_button.grid(column=1, row=1, padx=5, pady=5)
+            return
 
-        f_f.close()
+        # 파일 경로 가져오기
+        file_path = self.file_path_entry.get()
 
-        error_list.clear()
-        blank_list.clear()
-        count = 0
-        recount = 0
-        error_count = 0
+        if not file_path:
+            messagebox.showwarning(
+                title="알림",
+                message="경로를 지정하고 불러오기 버튼을 다시 눌러주세요. 텍스트 파일만 가능합니다."
+            )
+            return
 
-        data_frame = (pd.DataFrame([d_2, d_3, d_7, d_8, d_4, d_1, d_5, d_6]))
-        data_frame_re = data_frame.transpose()
-        data_frame_re.to_excel(label2_textbox.get() + '.xlsx')
+        # 경로에서 따옴표 제거
+        file_path = file_path.replace('"', '')
 
         try:
-            if str(msg_cancel_2) == "False":
-                tkinter.messagebox.showinfo(title="알림", message="오류로 인해 검색이 중지되었습니다")
-                pass
-            else:
-                tkinter.messagebox.showinfo(title="알림", message="검색이 완료되었습니다")
-        except:
-            tkinter.messagebox.showinfo(title="알림", message="검색이 완료되었습니다")
+            # 텍스트 파일 불러오기
+            with open(file_path, 'r') as file:
+                self.search_items = file.readlines()
 
+            messagebox.showinfo(title="알림", message="데이터를 불러왔습니다. 바로 검색을 시작합니다")
+            self.is_file_loaded = True
+            self.execute_search()
+            self.is_file_loaded = False
+        except Exception:
+            messagebox.showwarning(title="알림", message=f"{file_path} 경로에서 txt 파일을 찾지 못했습니다.")
 
-def execute_2():
-    ResultViewlabel_Scrollbar.delete(7, 99999999)
-    ResultViewlabel_Scrollbar_2.delete(0, 99999999)
-    pb_type.set(00)
-    progress_bar.update()
-    pb_type_2.set(00)
-    progress_bar_2.update()
-    clear()
+    def browse_file_to_load(self):
+        """불러올 파일 탐색 다이얼로그 열기"""
+        file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+        if file_path:
+            self.file_path_entry.delete(0, tk.END)
+            self.file_path_entry.insert(0, file_path)
 
+    def stop_search(self):
+        """검색 중지"""
+        if self.search_running:
+            self.search_running = False
+            messagebox.showinfo("알림", "검색이 중지되었습니다.")
 
-def clear():
-    try:
-        d_1.clear()
-    except:
-        pass
-    try:
-        d_2.clear()
-    except:
-        pass
-    try:
-        d_3.clear()
-    except:
-        pass
-    try:
-        d_4.clear()
-    except:
-        pass
-    try:
-        d_5.clear()
-    except:
-        pass
-    try:
-        d_6.clear()
-    except:
-        pass
-    try:
-        d_7.clear()
-    except:
-        pass
-    try:
-        d_8.clear()
-    except:
-        pass
-    try:
-        error_list.clear()
-    except:
-        pass
-    try:
-        error_list.clear()
-    except:
-        pass
-    try:
-        blank_list.clear()
-    except:
-        pass
-    try:
-        progress == 0
-    except:
-        pass
-    try:
-        count == 0
-    except:
-        pass
-    try:
-        recount == 0
-    except:
-        pass
-    try:
-        error_count == 0
-    except:
-        pass
-    try:
-        firstlabel_sub == ""
-    except:
-        pass
+    def execute_search(self):
+        """검색 실행"""
+        # 검색 실행 중 표시
+        self.search_running = True
 
+        # 저장 디렉토리 준비
+        if not self.prepare_save_directory():
+            self.search_running = False
+            return
 
-# ==========================================================================
+        # 시작 시간 기록
+        start_time = time.time()
 
-# 검색박스 내 확인 버튼
-action = ttk.Button(firstlabel, text="확인", command=execute)
-action.grid(column=5, row=0, sticky="W")
+        # 알림창 초기화
+        self.notification_listbox.delete(0, tk.END)
+        self.notification_listbox.insert(tk.END, "검색이 시작되었습니다...")
 
-# 검색박스 내 초기화 버튼
-reset = ttk.Button(firstlabel, text="초기화", command=execute_2)
-reset.grid(column=6, row=0, sticky="W")
-
-read_txt = ttk.Button(firstlabel, text="불러오기", command=execute_3)
-read_txt.grid(column=7, row=0, sticky="W")
-
-
-# ==========================================================================
-def kr_to_en(korean_word):
-    r_lst = []
-    for w in list(korean_word.strip()):
-        # 영어인 경우 구분해서 작성함.
-        if '가' <= w <= '힣':
-            # 588개 마다 초성이 바뀜.
-            ch1 = (ord(w) - ord('가')) // 588
-            # 중성은 총 28가지 종류
-            ch2 = ((ord(w) - ord('가')) - (588 * ch1)) // 28
-            ch3 = (ord(w) - ord('가')) - (588 * ch1) - 28 * ch2
-
-            # 초성 리스트. 00 ~ 18
-            CHOSUNG_LIST = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ',
-                            'ㅎ']
-            # 중성 리스트. 00 ~ 20
-            JUNGSUNG_LIST = ['ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ', 'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ', 'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ',
-                             'ㅡ', 'ㅢ',
-                             'ㅣ']
-            # 종성 리스트. 00 ~ 27 + 1(1개 없음)
-            JONGSUNG_LIST = [' ', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ',
-                             'ㅄ', 'ㅅ',
-                             'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']
-
-            r_lst.append([CHOSUNG_LIST[ch1], JUNGSUNG_LIST[ch2], JONGSUNG_LIST[ch3]])
+        # 검색어 가져오기
+        if self.is_file_loaded:
+            items = self.search_items
         else:
-            r_lst.append([w])
-    return r_lst
+            items = self.search_entry.get().split()
 
+        if not items:
+            messagebox.showwarning(title="알림", message="검색어를 입력해주세요")
+            self.search_running = False
+            return
 
-# 추출된 초성을 저자 기호로 변경 해주는 모듈
-def kr_to_num():
-    k_c_1 = kr_to_en(class_num_3_re)[0][0]
-    if "ㅊ" in k_c_1:
-        dic = {'ㅏ': 2, 'ㅐ': 2, 'ㅑ': 2, 'ㅒ': 2, 'ㅓ': 3, 'ㅔ': 3, 'ㅕ': 3, 'ㅖ': 3, 'ㅗ': 4, 'ㅘ': 4, 'ㅙ': 4,
-               'ㅚ': 4, 'ㅛ': 4,
-               'ㅜ': 5, 'ㅝ': 5, 'ㅞ': 5, 'ㅟ': 5, 'ㅠ': 5, 'ㅡ': 5, 'ㅢ': 5, 'ㅣ': 6}
-    else:
-        dic = {'ㅏ': 2, 'ㅐ': 3, 'ㅑ': 3, 'ㅒ': 3, 'ㅓ': 4, 'ㅔ': 4, 'ㅕ': 4, 'ㅖ': 4, 'ㅗ': 5, 'ㅘ': 5, 'ㅙ': 5,
-               'ㅚ': 5, 'ㅛ': 5,
-               'ㅜ': 6,
-               'ㅝ': 6, 'ㅞ': 6, 'ㅟ': 6, 'ㅠ': 6, 'ㅡ': 7, 'ㅢ': 7, 'ㅣ': 8}
-    k_c_2 = kr_to_en(class_num_3_re)[1][1]
-    convert1 = dic.get(str(k_c_2))
+        # 검색 옵션에 따라 다른 처리
+        if self.search_option.get() == 1:
+            self.search_by_author(items)
+        else:
+            self.search_by_isbn(items, start_time)
 
-    # 2번째 글자 자음 저장
-    dic2 = {'ㄱ': 1, "ㄲ": 1, "ㄴ": 19, "ㄷ": 2, "ㄸ": 2, "ㄹ": 29, "ㅁ": 3, "ㅂ": 4, "ㅃ": 4, "ㅅ": 5, "ㅆ": 5,
-            "ㅇ": 6, "ㅈ": 7,
-            "ㅉ": 7, "ㅊ": 8, "ㅋ": 87, "ㅌ": 88, "ㅍ": 89, "ㅎ": 9}
-    k_c_3 = kr_to_en(class_num_3_re)[1][0]
-    convert2 = dic2.get(str(k_c_3))
-    author_num = (class_num_3_re[:1] + str(convert1) + str(convert2))
-    d_7.append(author_num)
+    def search_by_author(self, items):
+        """저자명으로 검색"""
+        # 실행 로그 초기화 및 정보 표시
+        self.result_listbox.delete(7, tk.END)
+        self.result_listbox.insert(tk.END, f"{len(items)}개의 항목에 대하여 검색을 시작합니다")
 
+        # 알림창에 진행 상황 표시
+        self.notification_listbox.insert(tk.END, f"총 {len(items)}개 항목 처리 중...")
 
-# ISBN 13 to ISBN 10 모듈
-def ISBN_10(x):
-    before_isbn10 = str(x)[3:12]
-    ISBN_int_cul = (11 - (int(x / 10 ** 9) % 10) * 10 - (int(x / 10 ** 8) % 10) * 9 - (int(x / 10 ** 7) % 10) * 8 - (
-            int(x / 10 ** 6) % 10) * 7 - (int(x / 10 ** 5) % 10) * 6 - (int(x / 10 ** 4) % 10) * 5 - (
-                            int(x / 10 ** 3) % 10) * 4 - (int(x / 10 ** 2) % 10) * 3 - (int(x / 10) % 10) * 2) % 11
-    if ISBN_int_cul == 10:
-        ISBN_int_cul = 'X'
-    else:
-        pass
+        # 진행 상태바 초기화
+        self.total_progress_value.set(0)
+        self.total_progress_bar.update()
 
-    ISBN_10 = before_isbn10 + ISBN_int_cul + " "
-    List.append(ISBN_10)
+        for idx, item in enumerate(items):
+            # 검색 중지 확인
+            if not self.search_running:
+                break
 
+            # 한글, 영어 여부 확인
+            first_char = item[:1]
+            is_korean = ord('가') <= ord(first_char) <= ord('힣')
+            is_english = ord('a') <= ord(first_char.lower()) <= ord('z')
 
-# 국립 중앙 도서관 API 검색 모듈
-def find_book(x):
-    global progress
-    progress += 1
-    ResultViewlabel_Scrollbar.insert(tk.END, "")
-    ResultViewlabel_Scrollbar.insert(tk.END, x + "에 대한 정보를 검색합니다")
-    ResultViewlabel_Scrollbar.insert(tk.END, "전체진행도: " + str(progress) + "/" + str(len(List)))
-    # ============================================================
+            # 진행 상태바 업데이트
+            progress_percent = ((idx + 1) / len(items)) * 100
+            self.total_progress_value.set(progress_percent)
+            self.total_progress_bar.update()
 
-    # 진행도
-    progress_bar.grid(column=0, row=2, sticky="e")
+            # 입력값 검증
+            if not item.isalpha():
+                msg = f"{item}에 숫자가 포함됐습니다. 저자명이 잘못되었습니다."
+                should_continue = messagebox.askokcancel(
+                    title="알림",
+                    message=f"{msg} 검색을 중단하려면 취소 버튼을, 계속하려면 확인 버튼을 눌러주세요"
+                )
+                self.result_listbox.insert(tk.END, msg)
 
-    global progress_bar_2
-    progress_bar_2 = ttk.Progressbar(ResultViewlabel, orient="horizontal", length=400, mode="determinate",
-                                     maximum=len(List), variable=pb_type_2)
-    progress_bar_2.grid(column=0, row=3, sticky="e")
+                if not should_continue:
+                    break
+            elif not is_korean and is_english:
+                msg = f"{item}에 영어가 포함됐습니다. 저자명이 잘못되었습니다."
+                should_continue = messagebox.askokcancel(
+                    title="알림",
+                    message=f"{msg} 검색을 중단하려면 취소 버튼을, 계속하려면 확인 버튼을 눌러주세요"
+                )
+                self.result_listbox.insert(tk.END, msg)
 
-    pb_type_2.set(progress)
-    progress_bar_2.update()
+                if not should_continue:
+                    break
+            else:
+                self.search_results.count += 1
+                author_code = self.convert_korean_to_author_code(item)
+                self.search_results.author_codes.append(author_code)
 
-    # 현재 검색어 진행도 라벨
-    label3 = ttk.Label(ResultViewlabel, text="단일 진행도:", width=11)
-    label3.grid(column=0, row=2, sticky="W")
+                # 단일 진행도 업데이트 (100%)
+                self.progress_value.set(100)
+                self.progress_bar.update()
 
-    label4 = ttk.Label(ResultViewlabel, text="전체 진행도:", width=11)
-    label4.grid(column=0, row=3, sticky="W")
+                # 실행 로그 업데이트
+                self.result_listbox.insert(tk.END, f"처리 중: {item} → {author_code}")
+                self.result_listbox.see(tk.END)
 
-    # ===========================================================
-    kwd = x
-    key = "83a6dcb07e447377b1b6b1fb79fce8fcafec2afcfc8adc768ee2d32a1124b573"
-    url = (str("https://www.nl.go.kr/NL/search/openApi/search.do?key=") + key + str("&kwd=") + kwd + str(
-        "&pageNum=1&pageSize=1&apiType=json"))
-    res = urllib.request.urlopen(url)
-    res_msg = res.read().decode('utf-8')
-    data = json.loads(res_msg).get('result')
-    # 책 명 검색 엑셀 파일 추가
+        # 저장 경로
+        save_path = self.save_path_entry.get()
 
-    ResultViewlabel_Scrollbar.insert(tk.END, "제목 정보 검색중(1/5)")
-    ResultViewlabel_Scrollbar.see(tk.END)
-    pb_type.set(16)
-    progress_bar.update()
+        # 검색 결과 저장
+        with open(os.path.join(save_path, f"{self.success_entry.get()}.txt"), 'w') as f:
+            for code in self.search_results.author_codes:
+                f.write(f"{code}\n")
 
-    try:
-        for h in data:
-            class_num_2 = h['titleInfo']
-    except:
-        error_list.append(x)
-        pass
+        # 알림창에 결과 요약 표시
+        self.notification_listbox.delete(0, tk.END)
+        self.notification_listbox.insert(tk.END, f"저자 기호 변환 완료")
+        self.notification_listbox.insert(tk.END, f"총 처리 항목: {len(items)}")
+        self.notification_listbox.insert(tk.END, f"성공 항목: {self.search_results.count}")
+        self.notification_listbox.insert(tk.END, f"결과 파일: {os.path.join(save_path, self.success_entry.get())}.txt")
 
-    d_2.append(class_num_2)
+        self.search_running = False
+        self.clear_search_results()
+        messagebox.showinfo("알림", "저자 기호 변환이 완료되었습니다.")
 
-    # 책 저자 검색 및 엑셀 추가
-    ResultViewlabel_Scrollbar.insert(tk.END, "저자 정보 검색중(2/5)")
-    pb_type.set(32)
-    progress_bar.update()
+    def search_by_isbn(self, items, start_time):
+        """ISBN으로 검색"""
+        # 저장 경로
+        save_path = self.save_path_entry.get()
 
-    try:
-        for j in data:
-            class_num_3 = str(j["authorInfo"])
-            class_num_3_2 = re.sub(r"[^\uAC00-\uD7A30]", "", class_num_3)
-            global class_num_3_re
+        # 실행 로그 초기화 및 정보 표시
+        self.result_listbox.delete(7, tk.END)
+        self.result_listbox.insert(tk.END, f"{len(items)}개의 항목에 대하여 검색을 시작합니다")
 
-            if class_num_3_2 != "":
-                if (class_num_3_2.find('구성') != -1) or (class_num_3_2.find('저자') != -1):
-                    class_num_3_re = class_num_3_2[2:]
-                elif (class_num_3_2.find('글쓴이') != -1) or (class_num_3_2.find('엮은이') != -1) or (class_num_3_2.find('지은이') != -1):
-                    class_num_3_re = class_num_3_2[3:]
-                elif '글' in class_num_3_2:
-                    class_num_3_re = class_num_3_2.replace('글', '')
+        # 알림창에 진행 상황 표시
+        self.notification_listbox.insert(tk.END, f"총 {len(items)}개 항목 처리 중...")
+
+        # 진행 상태바 초기화
+        self.total_progress_value.set(0)
+        self.total_progress_bar.update()
+
+        # 실패 목록 파일 생성
+        with open(os.path.join(save_path, f"{self.fail_entry.get()}.txt"), 'w') as fail_file:
+            for idx, isbn in enumerate(items):
+                # 검색 중지 확인
+                if not self.search_running:
+                    break
+
+                isbn = isbn[:13]  # ISBN은 최대 13자리
+
+                # 진행 상태바 업데이트
+                progress_percent = ((idx + 1) / len(items)) * 100
+                self.total_progress_value.set(progress_percent)
+                self.total_progress_bar.update()
+
+                if len(isbn) in (10, 13):
+                    try:
+                        self.find_book_info(isbn)
+                        self.search_results.count += 1
+                    except Exception as e:
+                        if len(isbn) == 10:
+                            self.search_results.error_count += 1
+                            self.search_results.error_list.append(isbn)
+                            # 실행 로그에 오류 표시
+                            self.result_listbox.insert(tk.END, f"오류: {isbn} - {str(e)}")
+                        else:
+                            try:
+                                self.search_results.recount += 1
+                                isbn_10 = self.convert_isbn13_to_isbn10(isbn)
+                                self.search_items.append(isbn_10)
+                                # 실행 로그에 변환 정보 표시
+                                self.result_listbox.insert(tk.END, f"ISBN 변환: {isbn} → {isbn_10}")
+                            except Exception:
+                                self.search_results.error_count += 1
+                                self.search_results.error_list.append(isbn)
+                                # 실행 로그에 오류 표시
+                                self.result_listbox.insert(tk.END, f"변환 오류: {isbn}")
                 else:
-                    class_num_3_re = class_num_3_2
+                    if self.ignore_errors.get() == 0:
+                        msg = "올바른 ISBN인지 확인해주세요. 10자리 혹은 13자리 숫자여야 합니다."
+                        should_continue = messagebox.askokcancel(
+                            title="알림",
+                            message=f"{msg} 검색을 중단하려면 취소 버튼을, 계속하려면 확인 버튼을 눌러주세요"
+                        )
+                        self.result_listbox.insert(tk.END, f'잘못된 ISBN 형식: {isbn}')
+                        self.search_results.error_count += 1
+
+                        if not should_continue:
+                            break
+
+                # 실행 로그 스크롤
+                self.result_listbox.see(tk.END)
+
+            # 파일에 오류 정보 기록
+            fail_file.write(f"오류 항목: {self.search_results.error_list}\n")
+            fail_file.write(f"빈 결과 값 나온 항목: {self.search_results.blank_list}\n")
+            fail_file.write('빈 결과 값이 나온 경우, 검색은 성공했으나 일부 항목에 있어 누락된 결과 값이 있을 수 있습니다\n')
+
+        # 결과 데이터프레임 생성 및 저장
+        if self.search_results.titles:  # 결과가 있는 경우에만 저장
+            data = [
+                self.search_results.titles,
+                self.search_results.authors,
+                self.search_results.author_codes,
+                self.search_results.classification_codes,
+                self.search_results.main_categories,
+                self.search_results.isbns,
+                self.search_results.publishers,
+                self.search_results.publication_years
+            ]
+
+            df = pd.DataFrame(data).transpose()
+            df.columns = ['제목', '저자', '저자기호', '분류기호', '주제분류', 'ISBN', '출판사', '출판년도']
+            df.to_excel(os.path.join(save_path, f"{self.success_entry.get()}.xlsx"), index=False)
+
+        # 처리 시간 계산
+        end_time = time.time()
+        try:
+            processing_speed = round(len(items) / (end_time - start_time), 4)
+        except ZeroDivisionError:
+            processing_speed = "∞"
+
+        # 알림창에 결과 요약 표시
+        self.notification_listbox.delete(0, tk.END)
+        self.notification_listbox.insert(tk.END, f"검색 완료")
+        self.notification_listbox.insert(tk.END, f"검색 성공 개수: {self.search_results.count}")
+        self.notification_listbox.insert(tk.END, f"ISBN 변환 시도 개수: {self.search_results.recount}")
+        self.notification_listbox.insert(tk.END, f"오류 개수: {self.search_results.error_count}")
+        self.notification_listbox.insert(tk.END, f"처리 속도: {processing_speed} unit/s (높을수록 좋습니다)")
+        self.notification_listbox.insert(tk.END, f"결과 파일: {os.path.join(save_path, self.success_entry.get())}.xlsx")
+        self.notification_listbox.insert(tk.END, f"오류 파일: {os.path.join(save_path, self.fail_entry.get())}.txt")
+
+        # 검색 종료
+        self.search_running = False
+
+        # 검색 결과 초기화
+        self.clear_search_results()
+
+        # 완료 메시지
+        messagebox.showinfo(title="알림", message="검색이 완료되었습니다")
+
+    def reset_search(self):
+        """검색 초기화"""
+        self.result_listbox.delete(7, tk.END)
+        self.notification_listbox.delete(0, tk.END)
+        self.notification_listbox.insert(tk.END, "알림: 검색 결과 요약 정보가 여기에 표시됩니다")
+        self.notification_listbox.insert(tk.END, "검색 성공 개수, 오류 개수, 처리 속도 등이 표시됩니다")
+        self.progress_value.set(0)
+        self.progress_bar.update()
+        self.total_progress_value.set(0)
+        self.total_progress_bar.update()
+        self.clear_search_results()
+
+    def clear_search_results(self):
+        """검색 결과 초기화"""
+        self.search_results = SearchResults()
+
+    def find_book_info(self, isbn):
+        """국립 중앙 도서관 API로 도서 정보 검색"""
+        # 검색 중지 확인
+        if not self.search_running:
+            raise Exception("검색이 중지되었습니다")
+
+        # 진행 상태 업데이트
+        self.search_results.progress += 1
+
+        # 실행 로그 업데이트 (간결하게)
+        self.result_listbox.delete(7, tk.END)
+        self.result_listbox.insert(tk.END, f"{isbn}에 대한 정보를 검색합니다")
+
+        # API 요청
+        url = f"https://www.nl.go.kr/NL/search/openApi/search.do?key={self.api_key}&kwd={isbn}&pageNum=1&pageSize=1&apiType=json"
+        response = urllib.request.urlopen(url)
+        response_data = response.read().decode('utf-8')
+        data = json.loads(response_data).get('result')
+
+        # 단일 진행도 초기화
+        self.progress_value.set(0)
+        self.progress_bar.update()
+
+        # 제목 정보 검색
+        self.result_listbox.insert(tk.END, "제목 정보 검색중(1/5)")
+        self.result_listbox.see(tk.END)
+        self.progress_value.set(20)
+        self.progress_bar.update()
+
+        try:
+            title = data[0]['titleInfo']
+            self.search_results.titles.append(title)
+        except (IndexError, KeyError):
+            self.search_results.error_list.append(isbn)
+            raise Exception(f"ISBN {isbn}에 대한 정보를 찾을 수 없습니다")
+
+        # 저자 정보 검색
+        self.result_listbox.insert(tk.END, "저자 정보 검색중(2/5)")
+        self.progress_value.set(40)
+        self.progress_bar.update()
+
+        try:
+            author_info = str(data[0]["authorInfo"])
+            author_name = re.sub(r"[^\uAC00-\uD7A30]", "", author_info)
+
+            if author_name:
+                # 저자 정보 정제
+                if any(keyword in author_name for keyword in ['구성', '저자']):
+                    author_name = author_name[2:]
+                elif any(keyword in author_name for keyword in ['글쓴이', '엮은이', '지은이']):
+                    author_name = author_name[3:]
+                elif '글' in author_name:
+                    author_name = author_name.replace('글', '')
             else:
-                class_num_3_re = "저자정보없음"
+                author_name = "저자정보없음"
 
-            d_3.append(class_num_3_re)
+            self.search_results.authors.append(author_name)
 
-            if class_num_3_re != "저자정보없음":
-                kr_to_num()
+            # 저자 기호 생성
+            if author_name != "저자정보없음":
+                author_code = self.convert_korean_to_author_code(author_name)
+                self.search_results.author_codes.append(author_code)
             else:
-                d_7.append("저자정보없음")
-                pass
-    except:
-        pass
+                self.search_results.author_codes.append("저자정보없음")
+        except Exception:
+            self.search_results.authors.append("저자정보없음")
+            self.search_results.author_codes.append("저자정보없음")
 
-    # 책 ISBN 엑셀 파일 추가
-    d_1.append(kwd)
+        # ISBN 추가
+        self.search_results.isbns.append(isbn)
 
-    # 책 듀이십진분류법 엑셀 파일 추가
-    ResultViewlabel_Scrollbar.insert(tk.END, "분류 번호 검색중(3/5)")
-    pb_type.set(48)
-    progress_bar.update()
+        # 분류 번호 검색
+        self.result_listbox.insert(tk.END, "분류 번호 검색중(3/5)")
+        self.progress_value.set(60)
+        self.progress_bar.update()
 
-    for i in data:
-        class_num = i['callNo']
-        if class_num == "":
-            blank_list.append(x)
-            d_8.append("-")
-            for j in data:
-                class_num = j['kdcCode1s']
-            if class_num == "":
-                d_4.append("-")
+        try:
+            call_no = data[0]['callNo']
+            if not call_no:
+                self.search_results.blank_list.append(isbn)
+                self.search_results.classification_codes.append("-")
+
+                kdc_code = data[0]['kdcCode1s']
+                if not kdc_code:
+                    self.search_results.main_categories.append("-")
+                else:
+                    self.search_results.main_categories.append(f"{kdc_code}00")
             else:
-                d_4.append(str(class_num) + "00")
+                first_char = call_no[:1]
+                if '0' <= first_char <= '9':
+                    self.search_results.main_categories.append(call_no[0:3])
+                    self.search_results.classification_codes.append("")
+                else:
+                    self.search_results.main_categories.append(call_no[1:4])
+                    self.search_results.classification_codes.append(call_no[:1])
+        except Exception:
+            self.search_results.classification_codes.append("-")
+            self.search_results.main_categories.append("-")
+
+        # 출판사 정보 검색
+        self.result_listbox.insert(tk.END, "출판사 정보 검색중(4/5)")
+        self.progress_value.set(80)
+        self.progress_bar.update()
+
+        try:
+            publisher = data[0]['pubInfo']
+            if not publisher:
+                self.search_results.blank_list.append(isbn)
+                self.search_results.publishers.append("-")
+            else:
+                self.search_results.publishers.append(publisher)
+        except Exception:
+            self.search_results.publishers.append("-")
+
+        # 출판 연도 검색
+        self.result_listbox.insert(tk.END, "출판 연도 검색중(5/5)")
+        self.progress_value.set(100)
+        self.progress_bar.update()
+
+        try:
+            pub_year = data[0]['pubYearInfo']
+            if not pub_year:
+                self.search_results.blank_list.append(isbn)
+                self.search_results.publication_years.append("출판연도정보없음")
+            else:
+                self.search_results.publication_years.append(pub_year[:4])
+        except Exception:
+            self.search_results.publication_years.append("출판연도정보없음")
+
+    def convert_korean_to_author_code(self, author_name):
+        """한글 저자명을 저자 기호로 변환"""
+        # 첫 글자의 초성 추출
+        first_char_components = self.decompose_korean_char(author_name[0])
+        first_consonant = first_char_components[0]
+
+        # 두 번째 글자의 중성 추출 (있는 경우)
+        if len(author_name) > 1:
+            second_char_components = self.decompose_korean_char(author_name[1])
+            second_vowel = second_char_components[1]
+            second_consonant = second_char_components[0]
+
+            # 중성을 숫자로 변환
+            if first_consonant == 'ㅊ':
+                vowel_to_num = {
+                    'ㅏ': 2, 'ㅐ': 2, 'ㅑ': 2, 'ㅒ': 2, 'ㅓ': 3, 'ㅔ': 3, 'ㅕ': 3, 'ㅖ': 3,
+                    'ㅗ': 4, 'ㅘ': 4, 'ㅙ': 4, 'ㅚ': 4, 'ㅛ': 4, 'ㅜ': 5, 'ㅝ': 5, 'ㅞ': 5,
+                    'ㅟ': 5, 'ㅠ': 5, 'ㅡ': 5, 'ㅢ': 5, 'ㅣ': 6
+                }
+            else:
+                vowel_to_num = {
+                    'ㅏ': 2, 'ㅐ': 3, 'ㅑ': 3, 'ㅒ': 3, 'ㅓ': 4, 'ㅔ': 4, 'ㅕ': 4, 'ㅖ': 4,
+                    'ㅗ': 5, 'ㅘ': 5, 'ㅙ': 5, 'ㅚ': 5, 'ㅛ': 5, 'ㅜ': 6, 'ㅝ': 6, 'ㅞ': 6,
+                    'ㅟ': 6, 'ㅠ': 6, 'ㅡ': 7, 'ㅢ': 7, 'ㅣ': 8
+                }
+
+            vowel_num = vowel_to_num.get(second_vowel, 0)
+
+            # 자음을 숫자로 변환
+            consonant_to_num = {
+                'ㄱ': 1, 'ㄲ': 1, 'ㄴ': 19, 'ㄷ': 2, 'ㄸ': 2, 'ㄹ': 29, 'ㅁ': 3, 'ㅂ': 4,
+                'ㅃ': 4, 'ㅅ': 5, 'ㅆ': 5, 'ㅇ': 6, 'ㅈ': 7, 'ㅉ': 7, 'ㅊ': 8, 'ㅋ': 87,
+                'ㅌ': 88, 'ㅍ': 89, 'ㅎ': 9
+            }
+
+            consonant_num = consonant_to_num.get(second_consonant, 0)
+
+            # 저자 기호 생성
+            return f"{author_name[0]}{vowel_num}{consonant_num}"
         else:
-            c_n_1 = class_num[:1]
-            if '0' <= c_n_1 <= '9':
-                d_4.append(class_num[0:3])
-                d_8.append("")
-            else:
-                d_4.append(class_num[1:4])
-                d_8.append(class_num[:1])
+            # 한 글자인 경우
+            return author_name
 
-    # 출판사 엑셀 파일 추가
-    ResultViewlabel_Scrollbar.insert(tk.END, "출판사 정보 검색중(4/5)")
-    pb_type.set(64)
-    progress_bar.update()
-    for k in data:
-        class_num_4 = k['pubInfo']
-        if class_num_4 == "":
-            blank_list.append(x)
-            d_5.append("-")
+    def decompose_korean_char(self, char):
+        """한글 문자를 초성, 중성, 종성으로 분해"""
+        if '가' <= char <= '힣':
+            char_code = ord(char) - ord('가')
+
+            # 초성 (19개)
+            consonants = [
+                'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ',
+                'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'
+            ]
+
+            # 중성 (21개)
+            vowels = [
+                'ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ', 'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ',
+                'ㅛ', 'ㅜ', 'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ'
+            ]
+
+            # 종성 (28개, 공백 포함)
+            finals = [
+                ' ', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ',
+                'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ',
+                'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'
+            ]
+
+            consonant_index = char_code // 588
+            vowel_index = (char_code - (588 * consonant_index)) // 28
+            final_index = char_code - (588 * consonant_index) - (28 * vowel_index)
+
+            return [consonants[consonant_index], vowels[vowel_index], finals[final_index]]
         else:
-            d_5.append(class_num_4)
+            return [char, '', '']
 
-    # 출판 연도 엑셀 파일 추가
-    ResultViewlabel_Scrollbar.insert(tk.END, "출판 연도 검색중(5/5)")
-    pb_type.set(80)
-    progress_bar.update()
+    def convert_isbn13_to_isbn10(self, isbn13):
+        """ISBN-13을 ISBN-10으로 변환"""
+        isbn10_base = isbn13[3:12]
 
-    for l in data:
-        class_num_5 = l['pubYearInfo']
-        if class_num_5 == "":
-            blank_list.append(x)
-            d_6.append("출판연도정보없음")
-        else:
-            d_6.append(class_num_5[:4])
-    pb_type.set(100)
-    progress_bar.update()
+        # 체크섬 계산
+        sum_val = 0
+        for i in range(9):
+            sum_val += int(isbn10_base[i]) * (10 - i)
+
+        check_digit = (11 - (sum_val % 11)) % 11
+        if check_digit == 10:
+            check_digit = 'X'
+
+        return f"{isbn10_base}{check_digit}"
 
 
-# ==========================================================================
+@dataclass
+class SearchResults:
+    """검색 결과를 저장하는 데이터 클래스"""
+    count: int = 0
+    recount: int = 0
+    error_count: int = 0
+    progress: int = 0
 
-win.mainloop()
+    titles: List[str] = field(default_factory=list)
+    authors: List[str] = field(default_factory=list)
+    author_codes: List[str] = field(default_factory=list)
+    classification_codes: List[str] = field(default_factory=list)
+    main_categories: List[str] = field(default_factory=list)
+    isbns: List[str] = field(default_factory=list)
+    publishers: List[str] = field(default_factory=list)
+    publication_years: List[str] = field(default_factory=list)
+
+    error_list: List[str] = field(default_factory=list)
+    blank_list: List[str] = field(default_factory=list)
+
+
+def main():
+    root = tk.Tk()
+    app = LibrarySearchApp(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
